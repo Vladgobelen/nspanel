@@ -390,7 +390,6 @@ impl X11Backend {
         self.conn.flush()?;
         self.tooltip_window = Some(window);
         self.tooltip_gc = Some(gc);
-        eprintln!("[dbg][x11] tooltip window created: 0x{:x}", window);
         Ok((window, gc))
     }
 
@@ -437,11 +436,6 @@ impl X11Backend {
         }
         if px < 0 { px = 0; }
         if py < 0 { py = 0; }
-
-        eprintln!(
-            "[dbg][x11] tooltip_show: lines={} w={} h={} pos=({},{})",
-            lines.len(), w, h, px, py
-        );
 
         // 1. Настраиваем окно (размер, позиция).
         self.conn.configure_window(
@@ -492,7 +486,6 @@ impl X11Backend {
         if !self.tooltip_visible {
             self.conn.map_window(window)?;
             self.tooltip_visible = true;
-            eprintln!("[dbg][x11] tooltip mapped");
         }
         self.conn.flush()?;
         Ok(())
@@ -506,7 +499,6 @@ impl X11Backend {
         if let Some(window) = self.tooltip_window {
             self.conn.unmap_window(window)?;
             self.conn.flush()?;
-            eprintln!("[dbg][x11] tooltip unmapped");
         }
         self.tooltip_visible = false;
         Ok(())
@@ -514,7 +506,6 @@ impl X11Backend {
 }
 
 impl ModuleHost for X11Backend {
-    // ... (всё, что было в impl ModuleHost, без изменений)
     fn popup_create(&mut self, w: u16, h: u16) -> Result<PopupId, ModuleError> {
         let screen = &self.conn.setup().roots[self.screen_num];
         let root = screen.root;
