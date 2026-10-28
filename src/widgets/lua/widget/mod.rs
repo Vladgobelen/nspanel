@@ -2,16 +2,17 @@
 //!
 //! Здесь только «что у виджета есть» и «как он создаётся»:
 //! - `struct LuaWidget` (Lua-контекст, `api`-таблица, `state`, сокет,
-//!   `image_loader`, длина, флаг relayout);
+//!   `image_loader`, длина, флаг relayout, DndCallbacks);
 //! - `LuaWidget::load` (создать `Lua`, выполнить `widget.lua`, получить
-//!   `api`-таблицу, создать `state`, положить `img` в глобалы);
-//! - `install_*` (подложить `buf`/`font`/`size`/`socket` в глобалы перед
-//!   вызовом Lua-функции);
+//!   `api`-таблицу, создать `state`, положить `img`/`dnd` в глобалы);
+//! - `install_*` (подложить `buf`/`font`/`size`/`socket`/`dnd` в глобалы
+//!   перед вызовом Lua-функции);
 //! - `sync_length_from_api` (взять `length` из `api` один раз).
 //!
 //! Здесь НЕТ:
 //! - `impl Widget` — это `adapter.rs` (трансляция Lua ↔ Rust);
-//! - `LuaImage` — это `image.rs` (глобал `img` для Lua-скриптов).
+//! - `LuaImage` — это `image.rs` (глобал `img` для Lua-скриптов);
+//! - `DndHandle` — это `../dnd_handle.rs`.
 
 pub mod adapter;
 pub mod image;
@@ -33,13 +34,14 @@ use self::image::LuaImage;
 
 use super::api::install_api;
 use super::buf::LuaBuf;
+use super::dnd_handle::{DndCallbacks, DndHandle};
 use super::font::LuaFont;
 use super::size::LuaSize;
 use super::socket::LuaSocket;
 
 pub struct LuaWidget {
     pub(super) id: String,
-    pub(super) lua: Lua,
+    pub(super) lua: Rc<Lua>,
     pub(super) api: Table,
     pub(super) state: Table,
     pub(super) socket: Option<UnixStreamClient>,
@@ -47,6 +49,7 @@ pub struct LuaWidget {
     pub(super) image_loader: Arc<ImageLoader>,
     pub(super) length: Rc<Cell<Option<u32>>>,
     pub(super) relayout_dirty: Arc<AtomicBool>,
+    pub(super) dnd: DndCallbacks,
 }
 
 impl LuaWidget {
@@ -56,7 +59,7 @@ impl LuaWidget {
         tooltip_enabled: bool,
     ) -> Result<Self, mlua::Error> {
         let id = id.into();
-        let lua = Lua::new();
+        let lua = Rc::new(Lua::new());
 
         let globals = lua.globals();
         install_api(&lua, &globals)?;
@@ -74,6 +77,14 @@ impl LuaWidget {
             },
         );
 
+        let dnd = DndCallbacks::new();
+        let _ = globals.set(
+            "dnd",
+            DndHandle {
+                callbacks: dnd.clone(),
+            },
+        );
+
         Ok(Self {
             id,
             lua,
@@ -84,6 +95,7 @@ impl LuaWidget {
             image_loader,
             length: Rc::new(Cell::new(None)),
             relayout_dirty: Arc::new(AtomicBool::new(false)),
+            dnd,
         })
     }
 
@@ -130,6 +142,15 @@ impl LuaWidget {
         }
     }
 
+    pub(super) fn install_dnd(&self) {
+        let _ = self.lua.globals().set(
+            "dnd",
+            DndHandle {
+                callbacks: self.dnd.clone(),
+            },
+        );
+    }
+
     pub(super) fn sync_length_from_api(&self) {
         if self.length.get().is_some() {
             return;
@@ -137,5 +158,10 @@ impl LuaWidget {
         if let Ok(v) = self.api.get::<u32>("length") {
             self.length.set(Some(v));
         }
+    }
+
+    /// Callbacks для регистрации в `X11Backend::dnd` (Фаза 4.4).
+    pub fn dnd_cb(&self) -> DndCallbacks {
+        self.dnd.clone()
     }
 }

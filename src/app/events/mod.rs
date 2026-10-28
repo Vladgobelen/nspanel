@@ -61,6 +61,9 @@ impl EventCtx<'_> {
 /// `Other` и `PropertyNotify` панель игнорирует: `PropertyNotify` — это
 /// забота nsbridge (он следит за `_NET_CLIENT_LIST` и т.п.), а панель
 /// получает уже готовый JSON через сокет.
+///
+/// `DndRedraw` — no-op на Фазе 2. В Фазе 5 будет вызывать `redraw.rs`
+/// (render + put_image), чтобы подсветить иконку под курсором с файлом.
 pub fn handle_x11_event(ctx: &mut EventCtx, ev: Event) -> Result<(), Box<dyn std::error::Error>> {
     match ev {
         Event::ButtonPress {
@@ -79,6 +82,8 @@ pub fn handle_x11_event(ctx: &mut EventCtx, ev: Event) -> Result<(), Box<dyn std
         Event::LeaveWindow { window } => expose::handle_leave(ctx, window),
 
         Event::Expose { window } => expose::handle_expose(ctx, window),
+
+        Event::DndRedraw => Ok(()),
 
         Event::PropertyNotify { .. } | Event::Other => Ok(()),
     }

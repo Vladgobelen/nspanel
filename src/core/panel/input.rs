@@ -14,13 +14,30 @@
 use crate::core::{Action, Rect, Widget, WidgetId};
 
 /// Найти индекс виджета под точкой (в локальных координатах панели).
-fn index_at(
-    lx: i32,
-    ly: i32,
-    layout_items: &[(WidgetId, Rect, i32)],
-) -> Option<usize> {
+///
+/// Если `lx` **за** последним виджетом (в зазоре между последней иконкой
+/// и краем панели), но `ly` в пределах высоты — возвращает **последний**
+/// виджет. Это нужно, чтобы hover/клик/тултип в упор к краю срабатывал
+/// на последнюю иконку. Для `widget_index_at` (drag) это НЕ применяется —
+/// там нужен строгий `contains`, иначе drag за край схватит последний.
+fn index_at(lx: i32, ly: i32, layout_items: &[(WidgetId, Rect, i32)]) -> Option<usize> {
     for (i, (_, rect, _)) in layout_items.iter().enumerate() {
         if rect.contains(lx, ly) {
+            return Some(i);
+        }
+    }
+    None
+}
+
+/// То же, но с «зазор = последний виджет» (только для hover/click/tooltip).
+fn index_at_loose(lx: i32, ly: i32, layout_items: &[(WidgetId, Rect, i32)]) -> Option<usize> {
+    if let Some(i) = index_at(lx, ly, layout_items) {
+        return Some(i);
+    }
+    // Зазор после последнего виджета: lx >= rect.right() последнего,
+    // ly в пределах вертикали последнего (для горизонтальной панели).
+    if let Some((i, (_, rect, _))) = layout_items.iter().enumerate().last() {
+        if lx >= rect.right() && ly >= rect.y && ly < rect.bottom() {
             return Some(i);
         }
     }
@@ -42,7 +59,7 @@ pub fn hit_test(
     index_at(lx, ly, layout_items).map(|i| layout_items[i].0.clone())
 }
 
-/// Индекс виджета под абсолютной точкой.
+/// Индекс виджета под абсолютной точкой (для drag — строгий `contains`).
 pub fn widget_index_at(
     x: i32,
     y: i32,
@@ -59,7 +76,7 @@ pub fn widget_index_at(
 
 /// Hover: передать `on_hover` виджету под курсором.
 ///
-/// Возвращает `true`, если виджет изменился (нужна перерисовка).
+/// «Зазор у края» — считается последним виджетом (`index_at_loose`).
 pub fn on_hover_at(
     x: i32,
     y: i32,
@@ -72,7 +89,7 @@ pub fn on_hover_at(
     }
     let lx = x - area.x;
     let ly = y - area.y;
-    if let Some(idx) = index_at(lx, ly, layout_items) {
+    if let Some(idx) = index_at_loose(lx, ly, layout_items) {
         let rect = layout_items[idx].1;
         let wx = lx - rect.x;
         let wy = ly - rect.y;
@@ -92,7 +109,7 @@ pub fn clear_hover(widgets: &mut [Box<dyn Widget>]) -> bool {
     any
 }
 
-/// Тултип для точки (если она над виджетом).
+/// Тултип для точки (если она над виджетом или в зазоре у края).
 pub fn tooltip_at(
     x: i32,
     y: i32,
@@ -105,7 +122,7 @@ pub fn tooltip_at(
     }
     let lx = x - area.x;
     let ly = y - area.y;
-    if let Some(idx) = index_at(lx, ly, layout_items) {
+    if let Some(idx) = index_at_loose(lx, ly, layout_items) {
         let rect = layout_items[idx].1;
         let wx = lx - rect.x;
         let wy = ly - rect.y;
@@ -115,6 +132,8 @@ pub fn tooltip_at(
 }
 
 /// Клик по точке: `on_click` виджета под курсором.
+///
+/// «Зазор у края» — считается последним виджетом.
 pub fn on_click_at(
     x: i32,
     y: i32,
@@ -127,7 +146,7 @@ pub fn on_click_at(
     }
     let lx = x - area.x;
     let ly = y - area.y;
-    if let Some(idx) = index_at(lx, ly, layout_items) {
+    if let Some(idx) = index_at_loose(lx, ly, layout_items) {
         let rect = layout_items[idx].1;
         let wx = lx - rect.x;
         let wy = ly - rect.y;

@@ -1,5 +1,6 @@
 //! X11-бэкенд панели.
 
+pub mod dnd;
 pub mod events;
 pub mod grab;
 pub mod panel_window;
@@ -18,6 +19,7 @@ use x11rb::wrapper::ConnectionExt as WrapperConnectionExt;
 use crate::core::module::{PixmapId, PopupId};
 use crate::core::Theme;
 
+use dnd::Dnd;
 use tooltip::Tooltip;
 
 #[allow(dead_code)]
@@ -38,6 +40,7 @@ pub enum Event {
     Expose { window: Window },
     LeaveWindow { window: Window },
     PropertyNotify { atom: u32, window: Window },
+    DndRedraw,
     Other,
 }
 
@@ -53,6 +56,7 @@ pub struct X11Backend {
     pub(crate) grabbed: bool,
     pub(crate) root_motion_subscribed: bool,
     pub(crate) tooltip: Tooltip,
+    pub(crate) dnd: Dnd,
 }
 
 impl X11Backend {
@@ -108,6 +112,19 @@ impl X11Backend {
         )?;
 
         conn.map_window(panel_window)?;
+
+        // XdndAware на панели: Firefox может проверять source'а
+        // (иначе XdndStatus accept=false).
+        let atom_xdnd_aware = conn.intern_atom(false, b"XdndAware")?.reply()?.atom;
+        conn.change_property32(
+            PropMode::REPLACE,
+            panel_window,
+            atom_xdnd_aware,
+            AtomEnum::ATOM,
+            &[5u32],
+        )?;
+        eprintln!("[dnd] XdndAware=5 set on panel 0x{:x}", panel_window);
+
         conn.flush()?;
 
         Ok(Self {
@@ -122,6 +139,7 @@ impl X11Backend {
             grabbed: false,
             root_motion_subscribed: false,
             tooltip: Tooltip::new(),
+            dnd: Dnd::new(),
         })
     }
 
@@ -138,7 +156,18 @@ impl X11Backend {
         self.conn.setup().roots[self.screen_num].root
     }
 
-    // ---------- tooltip (тонкие обёртки над `Tooltip`) ----------
+    // ---------- dnd ----------
+
+    #[allow(dead_code)]
+    pub fn dnd(&self) -> &Dnd {
+        &self.dnd
+    }
+
+    pub fn dnd_mut(&mut self) -> &mut Dnd {
+        &mut self.dnd
+    }
+
+    // ---------- tooltip ----------
 
     pub fn is_tooltip_window(&self, window: Window) -> bool {
         self.tooltip.is_window(window)

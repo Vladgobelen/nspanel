@@ -1,5 +1,5 @@
 //! Lua-виджеты: общие инструменты (`api`, `buf`, `font`, `helpers`,
-//! `json`, `size`, `socket`) и сам `LuaWidget`.
+//! `json`, `size`, `socket`, `dnd_handle`) и сам `LuaWidget`.
 //!
 //! `LuaWidget` разбит по файлам в `widget/`:
 //! - `widget/mod.rs`   — `struct LuaWidget` + `load` + `install_*`;
@@ -9,6 +9,7 @@
 //! Общие инструменты (не привязаны к конкретному виджету):
 //! - `api.rs`     — `now_hm`, `now_hms`, `Color`, `Rect`, `json`;
 //! - `buf.rs`     — `buf:*` (рисование);
+//! - `dnd_handle.rs` — `dnd:*` (XDND: update/set_on_hover/set_on_drop);
 //! - `font.rs`    — `font:text_width`;
 //! - `helpers.rs` — `table_to_rect`, `rect_to_table`, `lua_value_to_action`;
 //! - `json.rs`    — `json.decode` / `json.encode`;
@@ -17,6 +18,7 @@
 
 pub mod api;
 pub mod buf;
+pub mod dnd_handle;
 pub mod font;
 pub mod helpers;
 pub mod json;

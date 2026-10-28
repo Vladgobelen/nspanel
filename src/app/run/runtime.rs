@@ -1,16 +1,4 @@
 //! `Runtime` — всё, что живёт через весь `poll`-цикл.
-//!
-//! Одна ответственность: собрать объекты панели в один контейнер и
-//! один раз выполнить установку (конфиг, шрифт, тема, X11, панель,
-//! виджеты, окно, модули, буфер, стартовая отрисовка).
-//!
-//! Здесь НЕТ:
-//! - `poll`-цикла (это `run/loop.rs`);
-//! - подключения к nsbridge (это `run/connect.rs` + `app/bridge.rs`);
-//! - обработки событий (это `app/events/*`);
-//! - геометрии (это `app/geometry.rs`);
-//! - методов `render`/`handle_event` — `Runtime` не «божественный
-//!   объект», а контейнер данных. Логика — в подмодулях.
 
 use std::path::PathBuf;
 
@@ -24,11 +12,6 @@ use crate::render::{Font, PixelBuffer, SharedBuffer};
 use crate::widgets::factory;
 use crate::x11::X11Backend;
 
-/// Всё, что живёт через весь `poll`-цикл.
-///
-/// Поля публичные: `run/loop.rs` читает и мутирует их напрямую.
-/// Никаких геттеров/сеттеров — `Runtime` не инкапсулирует поведение,
-/// он контейнер.
 pub struct Runtime {
     pub x11: X11Backend,
     pub panel: Panel,
@@ -43,16 +26,6 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    /// Выполнить установку панели. Шаги:
-    /// 1. `Config::load_default`, `Font::load`, `Theme::from_config`.
-    /// 2. `X11Backend::new`, `Panel::new` с геометрией из `app::geometry`.
-    /// 3. Создать виджеты (`factory::create_all`) и применить prefs.
-    /// 4. `resize_panel` / `move_panel` / `update_strut` под позицию.
-    /// 5. `ModuleRegistry` + `MenuModule`.
-    /// 6. `PixelBuffer` нужного размера + стартовая отрисовка.
-    ///
-    /// Подключение к nsbridge — **не здесь** (это `run/connect.rs`,
-    /// потому что оно возвращает `reconnect_at`, который нужен циклу).
     pub fn setup() -> Result<Self, Box<dyn std::error::Error>> {
         // ---- 1. Конфиг, шрифт, тема ----
         let config = Config::load_default()?;
@@ -74,7 +47,8 @@ impl Runtime {
         panel.show_borders = config.panel.show_borders;
 
         // ---- 3. Виджеты ----
-        for w in factory::create_all(&config) {
+        let created = factory::create_all(&config);
+        for w in created.widgets {
             panel.add_widget(w);
         }
         panel.apply_prefs(&config.widgets.prefs);
@@ -102,6 +76,12 @@ impl Runtime {
         let _ = panel.any_needs_relayout();
         panel.render(&panel_buf, &theme);
         x11.put_image(&panel_buf)?;
+
+        // ---- 7. DND: callbacks виджетов + область панели ----
+        let pw = x11.panel_window;
+        x11.dnd_mut().register(created.dnd_callbacks);
+        x11.dnd_mut().resize(panel.area);
+        x11.dnd_mut().set_panel_window(pw);
 
         Ok(Self {
             x11,
