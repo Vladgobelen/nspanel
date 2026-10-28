@@ -1,4 +1,14 @@
-use crate::core::{Action, Rect};
+//! Контракт модуля (контекстное меню, popup'ы) и хоста, который
+//! предоставляет модулю X11-операции.
+//!
+//! `Module` — то, что открывается по клику (меню, будущие диалоги).
+//! `ModuleHost` — то, что модуль просит у `X11Backend`: popup-окна,
+//! pixmap'ы, копирование областей, grab указателя.
+//!
+//! `fill_rect` из `ModuleHost` убран: меню рисует всё через
+//! `popup_put_image` + `copy_area`, а `fill_rect` не вызывался.
+
+use crate::core::Action;
 use crate::render::SharedBuffer;
 
 /// Идентификатор модуля. Хранится в реестре как String.
@@ -73,9 +83,6 @@ pub trait ModuleHost {
     /// Удалить pixmap.
     fn pixmap_destroy(&mut self, id: PixmapId) -> Result<(), ModuleError>;
 
-    /// Залить прямоугольник в окне указанным цветом (0xAARRGGBB).
-    fn fill_rect(&mut self, popup: PopupId, rect: Rect, color: u32) -> Result<(), ModuleError>;
-
     /// Скопировать область из pixmap в окно.
     fn copy_area(
         &mut self,
@@ -97,6 +104,7 @@ pub trait Module {
     fn id(&self) -> &str;
     fn is_open(&self) -> bool;
     fn popup_id(&self) -> Option<PopupId>;
+    #[allow(dead_code)]
     fn popup_size(&self) -> (u16, u16);
     fn open(&mut self, host: &mut dyn ModuleHost, ctx: OpenContext) -> Result<(), ModuleError>;
     fn close(&mut self, host: &mut dyn ModuleHost) -> Result<(), ModuleError>;

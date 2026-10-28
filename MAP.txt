@@ -1,0 +1,99 @@
+nspanel/
+├── Cargo.toml                                   — зависимости: x11rb, chrono, fontdue, mlua, nix, serde, serde_json, png
+├── build.sh                                     — сборка (release/debug/run/debug-run)
+├── README.md                                    — описание проекта
+├── test.sh                                      — поиск окон/иконок (отладка)
+└── src/
+    ├── main.rs                                  — точка входа: mod-декларации + app::run()
+    ├── app/
+    │   ├── mod.rs                               — реэкспорт run::run
+    │   ├── geometry.rs                          — геометрия окна панели: panel_rect_for, panel_buf_size, nearest_edge, position_str
+    │   ├── bridge.rs                            — соединения с nsbridge: socket_path, recreate_bridge_connections
+    │   ├── poll.rs                              — таймаут poll (timeout_until) и relayout_and_render
+    │   ├── run/
+    │   │   ├── mod.rs                           — реэкспорт run::run + Runtime (doc: что где)
+    │   │   ├── loop.rs                          — run(): setup → initial_connect → poll-цикл (X11, сокеты, реконнект, таймеры)
+    │   │   ├── runtime.rs                       — struct Runtime (x11, panel, registry, config, theme, panel_buf, position, screen_w/h, bridge_path) + Runtime::setup()
+    │   │   └── connect.rs                       — initial_connect: стартовое подключение к nsbridge + RECONNECT_DELAY
+    │   └── events/
+    │       ├── mod.rs                           — EventCtx + диспетчер handle_x11_event (match по типу)
+    │       ├── button.rs                        — ButtonPress/Release: меню, drag виджета, drag панели, клик
+    │       ├── motion.rs                        — MotionNotify: drag, hover, CurrentTooltip, update_tooltip
+    │       ├── expose.rs                        — Expose/LeaveWindow: перерисовка панели/меню/тултипа, сброс hover
+    │       └── action.rs                        — исполнение Action: Log, RunCommand, no-op Custom/None
+    ├── config/
+    │   ├── mod.rs                               — struct Config + подструктуры + ConfigError + load
+    │   ├── parse.rs                             — from_lua_table: Lua Table → Config (без widgets)
+    │   ├── save.rs                              — save_panel_position: position обратно в config.lua merge'ом
+    │   ├── default.lua                          — дефолтный конфиг (встроен в бинарник)
+    │   └── widgets/
+    │       ├── mod.rs                           — модель: WidgetsConfig, WidgetEntry, WidgetPrefs, Side, ParamValue
+    │       ├── load.rs                          — чтение папки widgets/: load, load_one
+    │       └── save.rs                          — запись side/priority: save_all, save_one, replace_key
+    ├── core/
+    │   ├── mod.rs                               — реэкспорт Color, Rect, ModuleRegistry, Panel, Action, SizeMode, Theme, Widget, WidgetId
+    │   ├── color.rs                             — Color(0xAARRGGBB) + r/g/b/a + rgb()
+    │   ├── geometry.rs                          — Rect + contains/right/bottom
+    │   ├── ipc/
+    │   │   ├── mod.rs                           — реэкспорт UnixStreamClient, build_frame, parse_frames, MAX_FRAME
+    │   │   ├── socket.rs                        — UnixStreamClient: connect, try_clone, peek, read_into, write_all, as_raw_fd (транспорт, без фрейминга)
+    │   │   └── frame.rs                         — parse_frames / build_frame (чистые функции, MAX_FRAME, юнит-тесты)
+    │   ├── menu.rs                              — Menu + MenuItem: модель + рендер (draw_background, draw_items, render_full)
+    │   ├── module.rs                            — трейты Module/ModuleHost, ModuleAction, OpenContext, PopupId, PixmapId
+    │   ├── module_registry.rs                   — ModuleRegistry: open/close, handle_click_any/motion_any, render_open
+    │   ├── modules/
+    │   │   ├── mod.rs                           — реэкспорт MenuModule
+    │   │   └── menu.rs                          — MenuModule: impl Module (build items, open, close, click, motion)
+    │   ├── panel/
+    │   │   ├── mod.rs                           — struct Panel: поля + обёртки над layout/input/drag/render/timers
+    │   │   ├── layout.rs                        — чистая раскладка: apply_prefs, prefs_for_current, relayout, split_by_side
+    │   │   ├── input.rs                         — ввод: hit_test, hover, tooltip_at, on_click_at, menu_items, custom_action
+    │   │   ├── drag.rs                          — drag виджета: strip_coord, drop_position_for, insert_index, insert_widget
+    │   │   ├── render.rs                        — отрисовка панели: фон, рамки, призрак drag, полоса вставки
+    │   │   └── timers.rs                        — update_due/all, next_wakeup, needs_relayout, socket-сигналы
+    │   └── widget/
+    │       ├── mod.rs                           — реэкспорт Action, Widget, WidgetId, SizeMode, Theme
+    │       ├── action.rs                        — enum Action: None, RunCommand, Log, Custom
+    │       ├── behavior.rs                      — трейт Widget: render/on_click/hover/tooltip/menu_items/update/set_socket/on_socket_ready
+    │       ├── id.rs                            — type WidgetId = String
+    │       ├── size.rs                          — SizeMode: Fixed/Stretch + preferred_size()
+    │       └── theme.rs                         — Theme: bg/fg/font/font_size + from_config
+    ├── img/
+    │   ├── mod.rs                               — ImageLoader: load (PNG+resize+mtime-кеш), clear_cache
+    │   ├── cache.rs                             — IconCache: in-memory (путь, размер, фильтр, mtime) → ARGB
+    │   └── resize.rs                            — билинейный ресайз RGBA → ARGB u32 + Filter
+    ├── render/
+    │   ├── mod.rs                               — реэкспорт PixelBuffer, SharedBuffer, Font, DrawCommand
+    │   ├── buffer.rs                            — PixelBuffer (u32 ARGB): fill_rect, draw_line, draw_text, put_pixel
+    │   ├── command.rs                           — DrawCommand + execute_commands (задел на декларативный рендер)
+    │   └── font.rs                              — Font: load, rasterize (кеш глифов), text_width, line_height
+    ├── widgets/
+    │   ├── mod.rs                               — реэкспорт factory, lua, util
+    │   ├── factory.rs                           — create_all: config.widgets.entries → Vec<Box<dyn Widget>> (только Lua)
+    │   ├── util.rs                              — now_hm, now_hms, text_centered (масштабирование под area)
+    │   └── lua/
+    │       ├── mod.rs                           — общие инструменты Lua + реэкспорт LuaWidget
+    │       ├── api.rs                           — install_api: now_hm, now_hms, Color, Rect, json
+    │       ├── buf.rs                           — LuaBuf: fill_rect, draw_text, text_centered, draw_line, draw_pixels
+    │       ├── font.rs                          — LuaFont: text_width
+    │       ├── helpers.rs                       — table_to_rect, rect_to_table, lua_value_to_action
+    │       ├── json.rs                          — json.decode/json.encode (Lua ↔ serde_json)
+    │       ├── size.rs                          — LuaSize: set_length (длина + dirty-флаг relayout)
+    │       ├── socket.rs                        — LuaSocket: read (read_into + parse_frames + pending), write (write_all)
+    │       └── widget/
+    │           ├── mod.rs                       — struct LuaWidget + load + install_buf/size/socket + sync_length
+    │           ├── adapter.rs                   — impl Widget for LuaWidget (трансляция Lua ↔ Rust)
+    │           └── image.rs                     — LuaImage: глобал `img` для Lua (load PNG + resize)
+    └── x11/
+        ├── mod.rs                               — реэкспорт Event, X11Backend
+        └── backend/
+            ├── mod.rs                           — struct X11Backend + Event + new + геттеры + tooltip-обёртки + popup_id_for_window
+            ├── panel_window.rs                  — окно панели: put_image, move_panel, resize_panel, update_strut, clear_strut
+            ├── events.rs                        — next_event (X11 → Event), subscribe/unsubscribe_root_motion
+            ├── grab.rs                          — grab_pointer, ungrab_pointer
+            ├── tooltip.rs                       — struct Tooltip: ensure, show, hide, is_window
+            └── popups/
+                ├── mod.rs                       — impl ModuleHost for X11Backend (делегирует в windows/pixmaps/draw/grab)
+                ├── windows.rs                   — popup-окна: create/show/hide/put_image
+                ├── pixmaps.rs                   — pixmap: create/destroy
+                └── draw.rs                      — copy_area (pixmap → popup)

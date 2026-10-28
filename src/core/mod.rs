@@ -10,7 +10,6 @@ pub mod widget;
 
 pub use color::Color;
 pub use geometry::Rect;
-pub use module::OpenContext;
 pub use module_registry::ModuleRegistry;
 pub use panel::Panel;
 pub use widget::{Action, SizeMode, Theme, Widget, WidgetId};

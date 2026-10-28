@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::core::ipc::SocketClient;
+use crate::core::ipc::UnixStreamClient;
 use crate::core::Rect;
 use crate::render::SharedBuffer;
 
@@ -107,7 +107,7 @@ pub trait Widget {
 
     /// Дать виджету сокет для чтения данных от внешних демонов (nsbridge, ...).
     /// Панель не знает, что за данные — виджет сам решает.
-    fn set_socket(&mut self, _socket: SocketClient) {}
+    fn set_socket(&mut self, _socket: UnixStreamClient) {}
 
     /// Панель вызывает это, когда в сокете появились данные.
     /// Виджет сам решает, что с ними делать.
